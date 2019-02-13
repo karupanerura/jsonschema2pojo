@@ -17,13 +17,12 @@
 package org.jsonschema2pojo;
 
 import static java.util.Arrays.*;
-import static org.apache.commons.lang3.StringUtils.*;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
@@ -31,14 +30,17 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jsonschema2pojo.resolver.SchemeResolver;
+import org.jsonschema2pojo.resolver.ClassPathResolver;
 
 /**
  * Reads URI contents for various protocols.
  */
 public class ContentResolver {
 
-    private static final Set<String> CLASSPATH_SCHEMES = new HashSet<>(asList("classpath", "resource", "java"));
-    
+    private static final List<String> CLASSPATH_SCHEMES = asList("classpath", "resource", "java");
+
+    private final Map<String, SchemeResolver> schemeResolverMap = new HashMap<>();
     private final ObjectMapper objectMapper;
 
     public ContentResolver() {
@@ -49,7 +51,24 @@ public class ContentResolver {
     	this.objectMapper = new ObjectMapper(jsonFactory)
                 .enable(JsonParser.Feature.ALLOW_COMMENTS)
                 .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+
+       SchemeResolver resolver = new ClassPathResolver(this.objectMapper);
+       for (String scheme : CLASSPATH_SCHEMES) {
+           this.setSchemeResolver(scheme, resolver);
+       }
 	}
+
+    /**
+     * Set SchemeResolver to resolve custom scheme.
+     * When this class resolve URI of the registered scheme, this class delegates URI resolving to the registered SchemeResolver corresponding to the scheme.
+     *
+     * @param scheme
+     *               URI scheme
+     * @param resolver
+     */
+    public void setSchemeResolver(String scheme, SchemeResolver resolver) {
+        schemeResolverMap.put(scheme, resolver);
+    }
 
     /**
      * Resolve a given URI to read its contents and parse the result as JSON.
@@ -68,8 +87,9 @@ public class ContentResolver {
      */
     public JsonNode resolve(URI uri) {
 
-        if (CLASSPATH_SCHEMES.contains(uri.getScheme())) {
-            return resolveFromClasspath(uri);
+        SchemeResolver schemeResolver = schemeResolverMap.get(uri.getScheme());
+        if (schemeResolver != null) {
+            return schemeResolver.resolve(uri);
         }
 
         try {
@@ -80,24 +100,6 @@ public class ContentResolver {
             throw new IllegalArgumentException("Unrecognised URI, can't resolve this: " + uri, e);
         }
 
-    }
-
-    private JsonNode resolveFromClasspath(URI uri) {
-
-        String path = removeStart(removeStart(uri.toString(), uri.getScheme() + ":"), "/");
-        InputStream contentAsStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(path);
-
-        if (contentAsStream == null) {
-            throw new IllegalArgumentException("Couldn't read content from the classpath, file not found: " + uri);
-        }
-
-        try {
-            return objectMapper.readTree(contentAsStream);
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Error parsing document: " + uri, e);
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Unrecognised URI, can't resolve this: " + uri, e);
-        }
     }
 
 }
