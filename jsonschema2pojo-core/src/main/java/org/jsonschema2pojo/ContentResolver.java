@@ -52,10 +52,10 @@ public class ContentResolver {
                 .enable(JsonParser.Feature.ALLOW_COMMENTS)
                 .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
 
-       SchemeResolver resolver = new ClassPathResolver(this.objectMapper);
-       for (String scheme : CLASSPATH_SCHEMES) {
-           this.setSchemeResolver(scheme, resolver);
-       }
+    	SchemeResolver resolver = new ClassPathResolver(this.objectMapper);
+    	for (String scheme : CLASSPATH_SCHEMES) {
+    	    this.setSchemeResolver(scheme, resolver);
+    	}
 	}
 
     /**
